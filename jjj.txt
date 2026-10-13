@@ -1,0 +1,150 @@
+const regionsEndPoint = "https://countries.dev/region/";
+const subregionsEndPoint = "https://countries.dev/subregion/";
+const countryEndPoint = "https://countries.dev/name/";
+
+// 1. Get references to DOM elements
+const regionDD = document.querySelector("#region");
+const countryDD = document.querySelector("#country");
+const factsArea = document.querySelector("#facts-area");
+
+// 2. Add event listeners
+regionDD.addEventListener("change", handleRegionChange);
+countryDD.addEventListener("change", handleCountryChange);
+
+// 3. Handle region selection
+async function handleRegionChange(e) {
+    const region = e.target.value.trim();
+
+    countryDD.innerHTML = '<option value="">Select Country</option>';
+    factsArea.innerHTML = "";
+
+    if (!region) return;
+
+    let url;
+
+    if (region === "North America") {
+        url = `${subregionsEndPoint}Northern%20America`;
+    }
+    else if (region === "South America") {
+        url = `${subregionsEndPoint}South%20America`;
+    }
+    else {
+        const apiRegion = region === "Australia" ? "Oceania" : region;
+        url = `${regionsEndPoint}${encodeURIComponent(apiRegion)}`;
+    }
+
+    const storageKey = `countries-dev-${region.toLowerCase()}`;
+
+    try {
+        let countries;
+
+        if (localStorage.getItem(storageKey)) {
+            countries = JSON.parse(localStorage.getItem(storageKey));
+            console.log("Countries from local storage");
+        }
+        else {
+            const response = await fetch(url);
+
+            if (!response.ok) {
+                throw new Error("Failed to fetch countries");
+            }
+
+            countries = await response.json();
+
+            localStorage.setItem(storageKey, JSON.stringify(countries));
+            console.log("Countries from API");
+        }
+
+        populateCountryDropDown(countries);
+    }
+    catch (error) {
+        console.error(error);
+        factsArea.textContent = "Could not load countries.";
+    }
+}
+
+// 4. Populate country dropdown
+function populateCountryDropDown(countries) {
+    const countryOptions = countries
+        .map(country => country.name)
+        .sort()
+        .map(name => `<option value="${name}">${name}</option>`)
+        .join("");
+
+    countryDD.innerHTML =
+        '<option value="">Select Country</option>' + countryOptions;
+}
+
+// 5. Handle country selection
+async function handleCountryChange(e) {
+    const countryName = e.target.value;
+
+    if (!countryName) {
+        factsArea.innerHTML = "";
+        return;
+    }
+
+    const url = `${countryEndPoint}${encodeURIComponent(countryName)}`;
+
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error("Failed to fetch country information");
+        }
+
+        const data = await response.json();
+
+        const country = data.find(
+            item => item.name === countryName
+        ) || data[0];
+
+        factsArea.innerHTML = convertCountryToHTML(country);
+    }
+    catch (error) {
+        console.error(error);
+        factsArea.textContent = "Could not load country information.";
+    }
+}
+
+// 6. Convert country object into HTML
+function convertCountryToHTML(country) {
+    const currencies = (country.currencies || [])
+        .map(currency => currency.name)
+        .join(", ") || "N/A";
+
+    const languages = (country.languages || [])
+        .map(language => language.name)
+        .join(", ") || "N/A";
+
+    return `
+        <h1>Facts about ${country.name}</h1>
+
+        <img src="${country.flags?.png || ''}"
+             alt="Flag of ${country.name}"
+             width="100">
+
+        <table>
+            <tr>
+                <th>Official Country Name</th>
+                <td>${country.name}</td>
+            </tr>
+            <tr>
+                <th>Capital City</th>
+                <td>${country.capital || "N/A"}</td>
+            </tr>
+            <tr>
+                <th>Population</th>
+                <td>${country.population?.toLocaleString() || "N/A"}</td>
+            </tr>
+            <tr>
+                <th>Currencies</th>
+                <td>${currencies}</td>
+            </tr>
+            <tr>
+                <th>Languages</th>
+                <td>${languages}</td>
+            </tr>
+        </table>
+    `;
+}
